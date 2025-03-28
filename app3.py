@@ -8,11 +8,13 @@ from langchain.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
-from dotenv import load_dotenv
 
-load_dotenv()
-os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Configure Google API key directly
+GOOGLE_API_KEY = "AIzaSyC2CU7kmSHct5vKBPv58FHhxHbN5Ow8gxM"  # Replace with your actual API key
+genai.configure(api_key=GOOGLE_API_KEY)
+
+# Set up the API key for both embeddings and chat model
+os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
 # Initialize session state variables
 if 'chat_history' not in st.session_state:
