@@ -1,19 +1,13 @@
 import streamlit as st
-from PyPDF2 import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-import os
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-import google.generativeai as genai
-from langchain.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains.question_answering import load_qa_chain
+from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
+import os
 
 # Configure Google API key directly
 GOOGLE_API_KEY = "AIzaSyC2CU7kmSHct5vKBPv58FHhxHbN5Ow8gxM"  # Replace with your actual API key
-genai.configure(api_key=GOOGLE_API_KEY)
 
-# Set up the API key for both embeddings and chat model
+# Set up the API key for the chat model
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
 # Initialize session state variables
@@ -24,50 +18,27 @@ if 'chat_history' not in st.session_state:
 if 'user_question' not in st.session_state:
     st.session_state.user_question = ""
 
-def get_pdf_text(pdf_docs):
-    text = ""
-    for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-    return text
-
-def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
-    chunks = text_splitter.split_text(text)
-    return chunks
-
-def get_vector_store(text_chunks):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
-    vector_store.save_local("faiss_index")
-
 def get_conversational_chain():
     prompt_template = """
-    Accelerated Recovery focuses on helping individuals recover from alcohol dependency through a private, intensive, and science-based treatment program. It emphasizes a non-12-step approach and is tailored to professionals, executives, and high-achievers who want a discreet and effective recovery process. answer any related question wether it is in context or not to the helping individuals recover from alcohol dependency  \n {context}?\n
-    Question: \n{question}\n
+    You are an AI assistant specialized in helping individuals recover from alcohol dependency. 
+    You provide information about private, intensive, and science-based treatment programs, 
+    focusing on non-12-step approaches tailored for professionals, executives, and high-achievers.
+    
+    Question: {question}
     Answer:
     """
     model = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", temperature=0.3)
-    prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
-    chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
+    prompt = PromptTemplate(template=prompt_template, input_variables=["question"])
+    chain = LLMChain(llm=model, prompt=prompt)
     return chain
 
 def user_input(user_question):
     try:
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-        new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-        docs = new_db.similarity_search(user_question)
-        
         chain = get_conversational_chain()
-        
-        response = chain(
-            {"input_documents": docs, "question": user_question}, 
-            return_only_outputs=True
-        )
+        response = chain.run(question=user_question)
         
         # Add the question and answer to the chat history
-        st.session_state.chat_history.append({"question": user_question, "answer": response["output_text"]})
+        st.session_state.chat_history.append({"question": user_question, "answer": response})
         
     except Exception as e:
         error_message = str(e)
@@ -91,15 +62,15 @@ def handle_input():
         st.session_state.user_question = ""
 
 def main():
-    st.set_page_config("Chat PDF")
-    st.header(" AI Chatbot 🤖")
+    st.set_page_config("Alcohol Recovery Assistant")
+    st.header("Alcohol Recovery Assistant 🤖")
     
     # Create a container for chat history that will appear above the input
     chat_container = st.container()
     
     # User input with callback
     st.text_input(
-        "Any Questions ? ", 
+        "Ask any question about alcohol recovery: ", 
         key="user_question",
         on_change=handle_input
     )
@@ -114,20 +85,7 @@ def main():
                 st.markdown("---")
     
     with st.sidebar:
-        st.title("Menu:")
-        pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
-        
-        if st.button("Submit & Process"):
-            with st.spinner("Processing..."):
-                try:
-                    raw_text = get_pdf_text(pdf_docs)
-                    text_chunks = get_text_chunks(raw_text)
-                    get_vector_store(text_chunks)
-                    st.success("Done")
-                except Exception as e:
-                    st.error(f"Error processing documents: {str(e)}")
-        
-        # Modified clear chat history button that doesn't call experimental_rerun
+        st.title("Menu")
         if st.button("Clear Chat History"):
             clear_chat_history()
             st.success("Chat history cleared!")
